@@ -2,7 +2,7 @@
 
 ## Description (main.py)
 - This code does not use sklearn functions (from scratch)
-- This code implements a Poisson regression with gradient ascent.
+- This code implements a Generalized Linear Model with a Poisson distribution with gradient ascent.
 - This code make a prediction given new inputs (function predict).
 
 ## Execution
