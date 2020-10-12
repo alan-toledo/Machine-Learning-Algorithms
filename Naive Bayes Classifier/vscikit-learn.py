@@ -18,10 +18,8 @@ def get_words(message):
        The list of normalized words from the message.
     """
 
-    # *** START CODE HERE ***
     words = [str(word).lower() for word in message.split(' ') if word.strip() != ""]
     return words
-    # *** END CODE HERE ***
 
 def create_dictionary(messages):
     """Create a dictionary mapping words to integer indices.

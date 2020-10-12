@@ -1,6 +1,8 @@
 import collections
 import numpy as np
 import util
+import svm
+
 
 def get_words(message):
     """Get the normalized list of words from a message string.
@@ -88,96 +90,34 @@ def transform_text(messages, word_dictionary):
     
     return matrix
 
-def fit_naive_bayes_model(matrix, labels):
-    """Fit a naive bayes model.
+def compute_best_svm_radius(train_matrix, train_labels, val_matrix, val_labels, radius_to_consider):
+    """Compute the optimal SVM radius using the provided training and evaluation datasets.
 
-    This function should fit a Naive Bayes model given a training matrix and labels.
-
-    The function should return the state of that model.
-
-    Feel free to use whatever datatype you wish for the state of the model.
+    You should only consider radius values within the radius_to_consider list.
+    You should use accuracy as a metric for comparing the different radius values.
 
     Args:
-        matrix: A numpy array containing word counts for the training data
-        labels: The binary (0 or 1) labels for that training data
+        train_matrix: The word counts for the training data
+        train_labels: The spma or not spam labels for the training data
+        val_matrix: The word counts for the validation data
+        val_labels: The spam or not spam labels for the validation data
+        radius_to_consider: The radius values to consider
 
-    Returns: The trained model
+    Returns:
+        The best radius which maximizes SVM accuracy.
     """
+    SVM_radio = (-1.0, -1.0)
+    for radio in radius_to_consider:
+        svm_predictions = svm.train_and_predict_svm(train_matrix, train_labels, val_matrix, radio)
+        svm_accuracy = np.mean(svm_predictions == val_labels)
+        if svm_accuracy > SVM_radio[1]:
+            SVM_radio = (radio, svm_accuracy)
+    return SVM_radio[0]
 
-    p_spam = np.sum(labels == 1.0)/len(labels)
-    p_ham =  np.sum(labels == 0.0)/len(labels)
-    V = matrix.shape[1]
-    spam, ham = {}, {}
-    words_spam = np.sum(matrix[labels == 1])
-    words_ham = np.sum(matrix[labels == 0])
-    n_words_by_columns = matrix.sum(axis=0)
-    for col in range(V):
-        word_given_spam = np.sum(matrix[labels == 1][:,col])        
-        word_given_ham = n_words_by_columns[col] - word_given_spam
-        
-        spam[col] = float(word_given_spam + 1.0) / float(words_spam + V)
-        ham[col] = float(word_given_ham + 1.0) / float(words_ham + V)
-
-    return p_spam, p_ham, spam, ham
-
-def predict_from_naive_bayes_model(model, matrix):
-    """Use a Naive Bayes model to compute predictions for a target matrix.
-
-    This function should be able to predict on the models that fit_naive_bayes_model
-    outputs.
-
-    Args:
-        model: A trained model from fit_naive_bayes_model
-        matrix: A numpy array containing word counts
-
-    Returns: A numpy array containg the predictions from the model
-    """
-    p_spam, p_ham, spam, ham = model
-    predictions = []
-    for words in matrix:
-
-        prediction = 0.0
-        is_spam = p_spam
-        is_ham = p_ham
-
-        for col in range(matrix.shape[1]):
-            is_spam *= np.power(spam[col], words[col])
-            is_ham *= np.power(ham[col], words[col])
-       
-        if is_spam > is_ham:
-            prediction = 1.0
-
-        predictions.append(prediction)
-    return np.array(predictions)
-
-def get_top_five_naive_bayes_words(model, dictionary):
-    """Compute the top five words that are most indicative of the spam (i.e positive) class.
-
-    Ues the metric given in part-c as a measure of how indicative a word is.
-    Return the words in sorted form, with the most indicative word first.
-
-    Args:
-        model: The Naive Bayes model returned from fit_naive_bayes_model
-        dictionary: A mapping of word to integer ids
-
-    Returns: A list of the top five most indicative words in sorted order with the most indicative first
-    """
-    _, _, spam, ham = model
-    most_indicative_words = {}
-    for word in dictionary:
-        col = dictionary[word]
-        most_indicative_words[word] = np.log(float(spam[col])/float(ham[col]))
-    
-    sorted_most_indicative_words = {k: v for k, v in sorted(most_indicative_words.items(), reverse=True, key=lambda item: item[1])}
-    top_five = []
-    for word in sorted_most_indicative_words:
-        top_five.append(word)
-        if len(top_five) >= 5:
-            break
-    return list(top_five)
 
 def main():
     train_messages, train_labels = util.load_spam_dataset('spam_train.tsv')
+    val_messages, val_labels = util.load_spam_dataset('spam_val.tsv')
     test_messages, test_labels = util.load_spam_dataset('spam_test.tsv')
 
     dictionary = create_dictionary(train_messages)
@@ -185,17 +125,20 @@ def main():
     print('Size of dictionary: ', len(dictionary))
     
     train_matrix = transform_text(train_messages, dictionary)
+    val_matrix = transform_text(val_messages, dictionary)
     test_matrix = transform_text(test_messages, dictionary)
-    naive_bayes_model = fit_naive_bayes_model(train_matrix, train_labels)
-    naive_bayes_predictions = predict_from_naive_bayes_model(naive_bayes_model, test_matrix)
-    
-    np.savetxt('spam_naive_bayes_predictions', naive_bayes_predictions)
-    naive_bayes_accuracy = np.mean(naive_bayes_predictions == test_labels)
 
-    print('Naive Bayes had an accuracy of {} on the testing set'.format(naive_bayes_accuracy))
-    top_5_words = get_top_five_naive_bayes_words(naive_bayes_model, dictionary)
+    optimal_radius = compute_best_svm_radius(train_matrix, train_labels, val_matrix, val_labels, [0.01, 0.1, 1, 10])
 
-    print('The top 5 indicative words for Naive Bayes are: ', top_5_words)
+    print('The optimal SVM radius was {}'.format(optimal_radius))
+
+    svm_predictions = svm.train_and_predict_svm(train_matrix, train_labels, test_matrix, optimal_radius)
+    np.savetxt('svm_predictions.txt', svm_predictions)
+
+    svm_accuracy = np.mean(svm_predictions == test_labels)
+
+    print('The SVM model had an accuracy of {} on the testing set'.format(svm_accuracy))
+
 
 if __name__ == "__main__":
     main()
